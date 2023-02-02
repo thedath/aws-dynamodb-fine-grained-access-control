@@ -12,27 +12,9 @@ export const handler = async (
   try {
     const assumedRoleARN = process.env.TABLE_WRITE_ASSUMED_ROLE!;
 
-    const { tenantId, email, ...rest } = event.queryStringParameters as {
-      [key: string]: string;
-    };
+    const body = JSON.parse(event.body!);
 
-    if (!tenantId) {
-      return {
-        statusCode: 403,
-        body: JSON.stringify({
-          message: "Tenant ID is required",
-        }),
-      };
-    }
-
-    if (!email) {
-      return {
-        statusCode: 403,
-        body: JSON.stringify({
-          message: "Email is required",
-        }),
-      };
-    }
+    return { statusCode: 200, body: JSON.stringify({ body }) };
 
     const sts = new STSClient({});
     const session = await sts.send(
@@ -61,20 +43,20 @@ export const handler = async (
       },
     });
 
-    const items: { [key: string]: { S: string } } = {};
-    Object.keys(rest).forEach((key) => {
-      items[key] = { S: rest[key]! };
-    });
+    // const items: { [key: string]: { S: string } } = {};
+    // Object.keys(rest).forEach((key) => {
+    //   items[key] = { S: rest[key]! };
+    // });
 
-    const result = await dynamoDb.send(
-      new PutItemCommand({
-        TableName: "OrgTable",
-        Item: { ...items },
-        ReturnValues: "",
-      })
-    );
+    // const result = await dynamoDb.send(
+    //   new PutItemCommand({
+    //     TableName: "OrgTable",
+    //     Item: { ...items },
+    //     ReturnValues: "",
+    //   })
+    // );
 
-    return { statusCode: 200, body: JSON.stringify({ ...result }) };
+    // return { statusCode: 200, body: JSON.stringify({ ...result }) };
   } catch (error) {
     console.log(error);
 
