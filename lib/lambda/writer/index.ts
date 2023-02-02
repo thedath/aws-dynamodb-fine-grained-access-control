@@ -1,6 +1,7 @@
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { APIGatewayEvent, APIGatewayProxyResult, Context } from "aws-lambda";
+import toDynamoDBInputItems from "../../utils/toDynamoDBInputItems";
 
 export const handler = async (
   event: APIGatewayEvent,
@@ -11,28 +12,28 @@ export const handler = async (
 
   try {
     const assumedRoleARN = process.env.TABLE_WRITE_ASSUMED_ROLE!;
+    const tableARN = process.env.TABLE_ARN!;
 
-    const { tenantId, email, ...rest } = event.queryStringParameters as {
-      [key: string]: string;
-    };
+    const {
+      auth: { o_id, u_id, entity },
+      ...rest
+    } = JSON.parse(event.body!);
 
-    if (!tenantId) {
-      return {
-        statusCode: 403,
-        body: JSON.stringify({
-          message: "Tenant ID is required",
-        }),
-      };
-    }
-
-    if (!email) {
-      return {
-        statusCode: 403,
-        body: JSON.stringify({
-          message: "Email is required",
-        }),
-      };
-    }
+    const Policy = JSON.stringify({
+      Effect: "ALLOW",
+      Action: ["dynamodb:PutItem"],
+      Resource: [tableARN],
+      Condition: {
+        "ForAllValues:StringEquals": {
+          "dynamodb:Attributes": [
+            "OrgPartK1",
+            "OrgSortK1",
+            ...[entity === "note" && ["n_content", "n_type"]],
+            ...[entity === "product" && ["p_id", "p_name"]],
+          ].filter((attr) => !!attr),
+        },
+      },
+    });
 
     const sts = new STSClient({});
     const session = await sts.send(
@@ -42,14 +43,15 @@ export const handler = async (
         DurationSeconds: 900,
         Tags: [
           {
-            Key: "OrgPartK1",
-            Value: "",
+            Key: "o_id",
+            Value: o_id,
           },
           {
-            Key: "OrgPartK2",
-            Value: "",
+            Key: "u_id",
+            Value: u_id,
           },
         ],
+        Policy,
       })
     );
 
@@ -61,23 +63,20 @@ export const handler = async (
       },
     });
 
-    const items: { [key: string]: { S: string } } = {};
-    Object.keys(rest).forEach((key) => {
-      items[key] = { S: rest[key]! };
-    });
-
     const result = await dynamoDb.send(
       new PutItemCommand({
         TableName: "OrgTable",
-        Item: { ...items },
-        ReturnValues: "",
+        Item: { ...toDynamoDBInputItems(rest) },
       })
     );
 
     return { statusCode: 200, body: JSON.stringify({ ...result }) };
   } catch (error) {
-    console.log(error);
+    console.error(error);
 
-    return { statusCode: 403, body: JSON.stringify({ error }) };
+    return {
+      statusCode: 403,
+      body: JSON.stringify({ error: (error as Error).message }),
+    };
   }
 };
