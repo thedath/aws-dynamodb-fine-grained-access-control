@@ -20,20 +20,37 @@ export const handler = async (
     } = JSON.parse(event.body!);
 
     const Policy = JSON.stringify({
-      Effect: "ALLOW",
-      Action: ["dynamodb:PutItem"],
-      Resource: [tableARN],
-      Condition: {
-        "ForAllValues:StringEquals": {
-          "dynamodb:Attributes": [
-            "OrgPartK1",
-            "OrgSortK1",
-            ...[entity === "note" && ["n_content", "n_type"]],
-            ...[entity === "product" && ["p_id", "p_name"]],
-          ].filter((attr) => !!attr),
+      Version: "2012-10-17",
+      Statement: [
+        {
+          Effect: "Allow",
+          Action: ["dynamodb:PutItem"],
+          Resource: [tableARN],
+          Condition: {
+            "ForAllValues:StringLike": {
+              "dynamodb:LeadingKeys": [
+                entity === "note"
+                  ? "org/${aws:PrincipalTag/o_id}/user/${aws:PrincipalTag/u_id}/note"
+                  : false,
+                entity === "product"
+                  ? "org/${aws:PrincipalTag/o_id}/user/${aws:PrincipalTag/u_id}/product"
+                  : false,
+              ].filter((val) => !!val),
+            },
+            "ForAllValues:StringEquals": {
+              "dynamodb:Attributes": [
+                "OrgPartK1",
+                "OrgSortK1",
+                ...(entity === "note" ? ["n_content", "n_type"] : []),
+                ...(entity === "product" ? ["p_name", "p_price"] : []),
+              ],
+            },
+          },
         },
-      },
+      ],
     });
+
+    console.log("Policy: ", Policy);
 
     const sts = new STSClient({});
     const session = await sts.send(

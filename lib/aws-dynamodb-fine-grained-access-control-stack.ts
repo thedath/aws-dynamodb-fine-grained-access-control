@@ -42,8 +42,8 @@ export class AwsDynamodbFineGrainedAccessControlStack extends Stack {
           "dynamodb:Attributes": [
             "OrgPartK1",
             "OrgSortK1",
-            "p_id",
             "p_name",
+            "p_price",
             "n_content",
             "n_type",
           ],
