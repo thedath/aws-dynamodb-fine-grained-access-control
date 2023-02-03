@@ -68,10 +68,21 @@ export class AwsDynamodbFineGrainedAccessControlStack extends Stack {
       resources: [table.tableArn],
       conditions: {
         "ForAllValues:StringLike": {
-          "dynamodb:LeadingKeys": ["${aws:PrincipalTag/OrgPartK1}/*"],
+          "dynamodb:LeadingKeys": [
+            "org/${aws:PrincipalTag/o_id}/user/${aws:PrincipalTag/u_id}/product",
+            "org/${aws:PrincipalTag/o_id}/user/${aws:PrincipalTag/u_id}/note",
+          ],
         },
         "ForAllValues:StringEquals": {
-          "dynamodb:Attributes": ["OrgPartK1", "OrgSortK1"],
+          "dynamodb:Attributes": [
+            "OrgPartK1",
+            "OrgSortK1",
+            "p_name",
+            "p_price",
+            "n_content",
+            "n_type",
+          ],
+          // "dynamodb:Select": "SPECIFIC_ATTRIBUTES",
         },
       },
     });
@@ -82,8 +93,9 @@ export class AwsDynamodbFineGrainedAccessControlStack extends Stack {
       code: lambda.Code.fromAsset("lib/lambda/reader"),
       assumedRolePolicyStatements: [readPolicy],
       assumedRoleArnEnvKey: "TABLE_READ_ASSUMED_ROLE",
-      sessionTags: ["OrgPartK1", "OrgPartK2"],
+      sessionTags: ["o_id", "u_id"],
     });
+    readLambda.addEnvironment("TABLE_ARN", table.tableArn);
 
     // API configurations
     const api = new apiGateway.RestApi(this, `${this.stackName}API`, {
