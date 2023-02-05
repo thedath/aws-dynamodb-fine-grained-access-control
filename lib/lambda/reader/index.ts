@@ -40,12 +40,11 @@ export const handler = async (
             },
             "ForAllValues:StringEquals": {
               "dynamodb:Attributes": [
-                "OrgPartK1",
+                "${aws:PrincipalTag/PK}",
                 "OrgSortK1",
                 ...(entity === "note" ? ["n_content", "n_type"] : []),
                 ...(entity === "product" ? ["p_name", "p_price"] : []),
               ],
-              "dynamodb:Select": "SPECIFIC_ATTRIBUTES",
             },
           },
         },
@@ -69,8 +68,16 @@ export const handler = async (
             Key: "u_id",
             Value: u_id,
           },
+          {
+            Key: "PK",
+            Value: "OrgPartK1",
+          },
+          {
+            Key: "SK",
+            Value: "OrgSortK1",
+          },
         ],
-        Policy,
+        // Policy,
       })
     );
 
