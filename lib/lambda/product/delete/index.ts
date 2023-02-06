@@ -1,13 +1,7 @@
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  TagResourceCommand,
-} from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
-import { Policy } from "@aws-sdk/client-iam";
 import { APIGatewayEvent, APIGatewayProxyResult, Context } from "aws-lambda";
 import toDynamoDBInputItems from "../../../utils/toDynamoDBInputItems";
-import permissions from "../../permissions";
 
 export const handler = async (
   event: APIGatewayEvent,
@@ -17,12 +11,11 @@ export const handler = async (
   console.log(`Context: ${JSON.stringify(context, null, 2)}`);
 
   try {
-    const assumedRoleARN = process.env.ASSUMED_ROLE!;
+    const assumedRoleARN = process.env.TABLE_WRITE_ASSUMED_ROLE!;
     const tableARN = process.env.TABLE_ARN!;
-    const readerIndexARN = process.env.READER_INDEX_ARN!;
 
     const {
-      auth: { org_id, user_role, user_id },
+      auth: { o_id, u_id, entity },
       ...rest
     } = JSON.parse(event.body!);
 
@@ -34,37 +27,26 @@ export const handler = async (
           Action: ["dynamodb:PutItem"],
           Resource: [tableARN],
           Condition: {
+            "ForAllValues:StringLike": {
+              "dynamodb:LeadingKeys": [
+                entity === "note"
+                  ? "org/${aws:PrincipalTag/o_id}/user/${aws:PrincipalTag/u_id}/note"
+                  : false,
+                entity === "product"
+                  ? "org/${aws:PrincipalTag/o_id}/user/${aws:PrincipalTag/u_id}/product"
+                  : false,
+              ].filter((val) => !!val),
+            },
             "ForAllValues:StringEquals": {
-              "dynamodb:Select": "SPECIFIC_ATTRIBUTES",
               "dynamodb:Attributes": [
-                permissions.product.writeIndex.partKey,
-                permissions.product.writeIndex.sortKey,
-                permissions.product.readIndex.partKey,
-                permissions.product.readIndex.sortKey,
-                ...permissions.product.creators[
-                  user_role as "owner" | "manager"
-                ],
+                "OrgPartK1",
+                "OrgSortK1",
+                ...(entity === "note" ? ["n_content", "n_type"] : []),
+                ...(entity === "product" ? ["p_name", "p_price"] : []),
               ],
             },
           },
         },
-        // {
-        //   Effect: "Allow",
-        //   Action: ["dynamodb:PutItem"],
-        //   Resource: [readerIndexARN],
-        //   Condition: {
-        //     "ForAllValues:StringEquals": {
-        //       "dynamodb:Select": "SPECIFIC_ATTRIBUTES",
-        //       "dynamodb:Attributes": [
-        //         permissions.product.readIndex.partKey,
-        //         permissions.product.readIndex.sortKey,
-        //         ...permissions.product.creators[
-        //           user_role as "owner" | "manager"
-        //         ],
-        //       ],
-        //     },
-        //   },
-        // },
       ],
     });
 
@@ -77,9 +59,14 @@ export const handler = async (
         RoleSessionName: "TableWriterSession",
         DurationSeconds: 900,
         Tags: [
-          { Key: "org_id", Value: org_id },
-          { Key: "user_role", Value: user_role },
-          { Key: "user_id", Value: user_id },
+          {
+            Key: "o_id",
+            Value: o_id,
+          },
+          {
+            Key: "u_id",
+            Value: u_id,
+          },
         ],
         Policy,
       })
