@@ -9,6 +9,40 @@ import {
 import { Construct } from "constructs";
 import RoleAssumingLambda from "./RoleAssumingLambda";
 
+const permissions = {
+  product: {
+    partitionKey: "PartKey1",
+    sortKey: "SortKey1",
+    creators: ["owner", "manager"],
+    removers: ["owner"],
+    updaters: {
+      owner: ["name", "buying_price", "selling_price"],
+      manager: ["name"],
+    },
+    readers: {
+      owner: ["name", "buying_price", "selling_price"],
+      manager: ["name", "buying_price", "selling_price"],
+      customer: ["name", "selling_price"],
+    },
+  },
+  feedback: {
+    partitionKey: "PartKey2",
+    sortKey: "SortKey2",
+    creators: ["customer"],
+    removers: [""],
+    updaters: {
+      owner: ["reviewed"],
+      manager: ["reviewed"],
+      customer: ["content"],
+    },
+    readers: {
+      owner: ["content", "reviewed"],
+      manager: ["content", "reviewed"],
+      customer: ["content", "reviewed"],
+    },
+  },
+};
+
 export class AwsDynamodbFineGrainedAccessControlStack extends Stack {
   constructor(scope: Construct, id: string) {
     super(scope, id);

@@ -1,7 +1,6 @@
-import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { DynamoDBClient, QueryCommand } from "@aws-sdk/client-dynamodb";
 import { AssumeRoleCommand, STSClient } from "@aws-sdk/client-sts";
 import { APIGatewayEvent, APIGatewayProxyResult, Context } from "aws-lambda";
-import toDynamoDBInputItems from "../../utils/toDynamoDBInputItems";
 
 export const handler = async (
   event: APIGatewayEvent,
@@ -11,12 +10,14 @@ export const handler = async (
   console.log(`Context: ${JSON.stringify(context, null, 2)}`);
 
   try {
-    const assumedRoleARN = process.env.TABLE_WRITE_ASSUMED_ROLE!;
+    const assumedRoleARN = process.env.TABLE_READ_ASSUMED_ROLE!;
     const tableARN = process.env.TABLE_ARN!;
 
     const {
       auth: { o_id, u_id, entity },
-      ...rest
+      OrgPartK1,
+      OrgSortK1,
+      projectionString,
     } = JSON.parse(event.body!);
 
     const Policy = JSON.stringify({
@@ -24,7 +25,7 @@ export const handler = async (
       Statement: [
         {
           Effect: "Allow",
-          Action: ["dynamodb:PutItem"],
+          Action: ["dynamodb:Query"],
           Resource: [tableARN],
           Condition: {
             "ForAllValues:StringLike": {
@@ -39,7 +40,7 @@ export const handler = async (
             },
             "ForAllValues:StringEquals": {
               "dynamodb:Attributes": [
-                "OrgPartK1",
+                "${aws:PrincipalTag/PK}",
                 "OrgSortK1",
                 ...(entity === "note" ? ["n_content", "n_type"] : []),
                 ...(entity === "product" ? ["p_name", "p_price"] : []),
@@ -56,7 +57,7 @@ export const handler = async (
     const session = await sts.send(
       new AssumeRoleCommand({
         RoleArn: assumedRoleARN,
-        RoleSessionName: "TableWriterSession",
+        RoleSessionName: "TableReadSession",
         DurationSeconds: 900,
         Tags: [
           {
@@ -67,8 +68,16 @@ export const handler = async (
             Key: "u_id",
             Value: u_id,
           },
+          {
+            Key: "PK",
+            Value: "OrgPartK1",
+          },
+          {
+            Key: "SK",
+            Value: "OrgSortK1",
+          },
         ],
-        Policy,
+        // Policy,
       })
     );
 
@@ -81,9 +90,22 @@ export const handler = async (
     });
 
     const result = await dynamoDb.send(
-      new PutItemCommand({
+      new QueryCommand({
         TableName: "OrgTable",
-        Item: { ...toDynamoDBInputItems(rest) },
+        KeyConditionExpression: "#PK1 = :PK1V and #SK1 = :SK1V",
+        ExpressionAttributeNames: {
+          "#PK1": "OrgPartK1",
+          "#SK1": "OrgSortK1",
+        },
+        ExpressionAttributeValues: {
+          ":PK1V": {
+            S: OrgPartK1,
+          },
+          ":SK1V": {
+            S: OrgSortK1,
+          },
+        },
+        ProjectionExpression: projectionString,
       })
     );
 
