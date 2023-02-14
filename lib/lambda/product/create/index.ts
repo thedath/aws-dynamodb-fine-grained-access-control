@@ -37,10 +37,6 @@ export const handler = async (
             "ForAllValues:StringEquals": {
               "dynamodb:Select": "SPECIFIC_ATTRIBUTES",
               "dynamodb:Attributes": [
-                permissions.product.writeIndex.partKey,
-                permissions.product.writeIndex.sortKey,
-                permissions.product.readIndex.partKey,
-                permissions.product.readIndex.sortKey,
                 ...permissions.product.creators[
                   user_role as "owner" | "manager"
                 ],

@@ -1,15 +1,5 @@
 export default {
   product: {
-    writeIndex: {
-      primaryKey: true,
-      partKey: "TablePartKey",
-      sortKey: "TableSortKey",
-    },
-    readIndex: {
-      primaryKey: false,
-      partKey: "Index1PartKey",
-      sortKey: "Index1SortKey",
-    },
     creators: {
       owner: ["p_id", "p_name", "p_buying_price", "p_selling_price"],
       manager: ["p_id", "p_name"],
